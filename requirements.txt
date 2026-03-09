@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 streamlit
 langchain
 langchain-openai
@@ -10,5 +10,5 @@ pydantic
 httpx
 requests
 faker
-psycopg2-binary
 pandas
+pg8000

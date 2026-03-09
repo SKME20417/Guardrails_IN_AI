@@ -2,12 +2,13 @@
 Side-by-Side Role Comparison — send one query to all 3 roles simultaneously.
 """
 
+import os
 import streamlit as st
 import requests
 import time
 import pandas as pd
 
-API_URL = "http://localhost:8000"
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 EXL_LOGO_URL = "https://images.seeklogo.com/logo-png/45/1/exl-logo-png_seeklogo-452218.png"
 
 st.set_page_config(page_title="Role Comparison", page_icon="⚖️", layout="wide")

@@ -2,11 +2,12 @@
 Monitoring Dashboard — charts, stats, and audit log explorer.
 """
 
+import os
 import streamlit as st
 import requests
 import pandas as pd
 
-API_URL = "http://localhost:8000"
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 EXL_LOGO_URL = "https://images.seeklogo.com/logo-png/45/1/exl-logo-png_seeklogo-452218.png"
 
 st.set_page_config(page_title="Monitoring Dashboard", page_icon="📊", layout="wide")

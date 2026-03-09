@@ -2,11 +2,12 @@
 Streamlit chat frontend for the Insurance Claims Database Agent.
 """
 
+import os
 import streamlit as st
 import requests
 import uuid
 
-API_URL = "http://localhost:8000"
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 EXL_LOGO_URL = "https://images.seeklogo.com/logo-png/45/1/exl-logo-png_seeklogo-452218.png"
 
 st.set_page_config(

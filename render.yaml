@@ -1,0 +1,36 @@
+services:
+  # --- FastAPI Backend ---
+  - type: web
+    name: guardrails-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: EURI_API_KEY
+        sync: false
+      - key: EURI_BASE_URL
+        sync: false
+      - key: EURI_MODEL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.6
+
+  # --- Streamlit Frontend ---
+  - type: web
+    name: guardrails-ui
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: API_URL
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.6
