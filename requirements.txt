@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+streamlit
+langchain
+langchain-openai
+langchain-community
+supabase
+python-dotenv
+pydantic
+httpx
+requests
+faker
+psycopg2-binary
+pandas
