@@ -5,11 +5,13 @@ Supabase client singleton with support for both JWT and new key formats.
 """
 
 import re
+import logging
 from typing import Optional
-from supabase import Client
 import config
 
-_client: Optional[Client] = None
+logger = logging.getLogger(__name__)
+
+_client = None
 
 
 def _patch_key_validation():
@@ -39,16 +41,28 @@ def _patch_key_validation():
                 original_init(self, supabase_url, supabase_key, options)
 
         SyncClient.__init__ = patched_init
-    except Exception:
-        pass
+        logger.info("Supabase key validation patch applied.")
+    except ImportError:
+        logger.info("supabase._sync.client not found — skipping patch (may not be needed).")
+    except Exception as e:
+        logger.warning(f"Supabase patch failed (non-fatal): {e}")
 
 
 _patch_key_validation()
 
 
-def get_client() -> Client:
+def get_client():
     global _client
     if _client is None:
         from supabase import create_client
-        _client = create_client(config.SUPABASE_URL, config.SUPABASE_SERVICE_KEY)
+        url = config.SUPABASE_URL
+        key = config.SUPABASE_SERVICE_KEY
+        if not url or not key:
+            raise RuntimeError(
+                f"Missing Supabase config: SUPABASE_URL={'set' if url else 'MISSING'}, "
+                f"SUPABASE_SERVICE_KEY={'set' if key else 'MISSING'}"
+            )
+        logger.info(f"Creating Supabase client for {url[:40]}...")
+        _client = create_client(url, key)
+        logger.info("Supabase client created.")
     return _client

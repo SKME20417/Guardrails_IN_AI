@@ -4,12 +4,13 @@ from __future__ import annotations
 FastAPI backend serving the guarded LangChain agent.
 """
 
+import logging
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
-from agents.agent import GuardedAgent
-from database.connection import get_client
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Insurance Claims Agent API",
@@ -25,7 +26,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-agent = GuardedAgent()
+_agent = None
+
+
+def get_agent():
+    global _agent
+    if _agent is None:
+        logger.info("Initializing GuardedAgent (first request)...")
+        from agents.agent import GuardedAgent
+        _agent = GuardedAgent()
+        logger.info("GuardedAgent ready.")
+    return _agent
+
+
+def get_db_client():
+    from database.connection import get_client
+    return get_client()
+
+
+@app.on_event("startup")
+async def startup():
+    import config
+    logger.info("=== Backend Starting ===")
+    logger.info(f"EURI_API_KEY set: {bool(config.EURI_API_KEY)}")
+    logger.info(f"EURI_BASE_URL: {config.EURI_BASE_URL}")
+    logger.info(f"SUPABASE_URL set: {bool(config.SUPABASE_URL)}")
+    logger.info(f"SUPABASE_SERVICE_KEY set: {bool(config.SUPABASE_SERVICE_KEY)}")
+    logger.info("=== Startup complete, waiting for requests ===")
 
 
 # ─── Chat Models ────────────────────────────────────────────────
@@ -61,7 +88,7 @@ async def chat(request: ChatRequest):
                 elif msg.get("role") == "assistant":
                     langchain_history.append(AIMessage(content=msg["content"]))
 
-        result = agent.process(
+        result = get_agent().process(
             user_input=request.message,
             session_id=request.session_id,
             chat_history=langchain_history,
@@ -78,11 +105,11 @@ async def chat(request: ChatRequest):
 async def health():
     db_status = "unknown"
     try:
-        client = get_client()
+        client = get_db_client()
         client.table("policyholders").select("id").limit(1).execute()
         db_status = "connected"
-    except Exception:
-        db_status = "disconnected"
+    except Exception as e:
+        db_status = f"disconnected: {str(e)[:100]}"
 
     return {
         "status": "healthy",
@@ -136,7 +163,7 @@ async def get_monitoring_logs(
     offset: int = Query(0, ge=0, description="Pagination offset"),
 ):
     try:
-        client = get_client()
+        client = get_db_client()
         q = client.table("guardrail_logs").select("*", count="exact")
 
         if session_id:
@@ -164,7 +191,7 @@ async def get_monitoring_logs(
 @app.get("/monitoring/stats")
 async def get_monitoring_stats():
     try:
-        client = get_client()
+        client = get_db_client()
 
         all_logs = client.table("guardrail_logs").select("guardrail_layer, action, blocked, hallucination_flag, tool_called, tool_allowed, execution_time_ms", count="exact").execute()
         total = all_logs.count or 0
@@ -215,7 +242,7 @@ async def get_monitoring_stats():
 @app.get("/monitoring/sessions")
 async def get_sessions(limit: int = Query(20, ge=1, le=100)):
     try:
-        client = get_client()
+        client = get_db_client()
         result = client.table("guardrail_logs").select(
             "session_id"
         ).eq("guardrail_layer", "monitoring").order(
