@@ -175,6 +175,7 @@ class GuardedAgent:
             base_url=config.EURI_BASE_URL,
             temperature=0.1,
             max_tokens=2048,
+            model_kwargs={"max_completion_tokens": 2048},
         )
 
         self.policy_guard = PolicyGuardrail()
