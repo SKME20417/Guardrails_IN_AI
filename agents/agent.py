@@ -169,14 +169,13 @@ class ReActAgent:
 class GuardedAgent:
 
     def __init__(self):
-        self.llm = ChatOpenAI(
+        _base_llm = ChatOpenAI(
             model=config.EURI_MODEL,
             api_key=config.EURI_API_KEY,
             base_url=config.EURI_BASE_URL,
             temperature=0.1,
-            max_tokens=2048,
-            model_kwargs={"max_completion_tokens": 2048},
         )
+        self.llm = _base_llm.bind(max_tokens=2048)
 
         self.policy_guard = PolicyGuardrail()
         self.input_guard = InputGuardrail()
