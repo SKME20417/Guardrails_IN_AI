@@ -9,9 +9,44 @@ import time
 import uuid
 import re
 from typing import Optional, List, Dict
-from langchain_openai import ChatOpenAI
+from openai import OpenAI
+from langchain_core.messages import AIMessage
 
 import config
+
+
+class DirectLLM:
+    """Thin wrapper around the OpenAI SDK that guarantees max_tokens is sent
+    correctly to the Euri API, bypassing langchain's parameter remapping."""
+
+    def __init__(self, model: str, api_key: str, base_url: str,
+                 temperature: float = 0.1, max_tokens: int = 2048):
+        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        self._model = model
+        self._temperature = temperature
+        self._max_tokens = max_tokens
+
+    def invoke(self, prompt) -> AIMessage:
+        if isinstance(prompt, str):
+            messages = [{"role": "user", "content": prompt}]
+        elif isinstance(prompt, list):
+            messages = [
+                {"role": getattr(m, "type", "user"), "content": getattr(m, "content", str(m))}
+                for m in prompt
+            ]
+        else:
+            messages = [{"role": "user", "content": str(prompt)}]
+
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
+        )
+        content = response.choices[0].message.content or ""
+        return AIMessage(content=content)
+
+
 from agents.tools import ALL_TOOLS
 from guardrails.policy import PolicyGuardrail
 from guardrails.input_guard import InputGuardrail
@@ -169,13 +204,13 @@ class ReActAgent:
 class GuardedAgent:
 
     def __init__(self):
-        _base_llm = ChatOpenAI(
+        self.llm = DirectLLM(
             model=config.EURI_MODEL,
             api_key=config.EURI_API_KEY,
             base_url=config.EURI_BASE_URL,
             temperature=0.1,
+            max_tokens=2048,
         )
-        self.llm = _base_llm.bind(max_tokens=2048)
 
         self.policy_guard = PolicyGuardrail()
         self.input_guard = InputGuardrail()
