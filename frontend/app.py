@@ -206,6 +206,26 @@ user_input = st.chat_input("Ask about policyholders, policies, or claims...")
 if pending:
     user_input = pending
 
+import time as _time
+
+
+def call_api_with_retry(payload, max_retries=3):
+    """Call backend API with automatic retry for 502/503 (Render cold starts)."""
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(f"{API_URL}/chat", json=payload, timeout=90)
+            if resp.status_code in (502, 503) and attempt < max_retries - 1:
+                _time.sleep(3)
+                continue
+            return resp
+        except requests.exceptions.ConnectionError:
+            if attempt < max_retries - 1:
+                _time.sleep(3)
+                continue
+            raise
+    return resp
+
+
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     st.session_state.total_queries += 1
@@ -215,7 +235,7 @@ if user_input:
         with st.spinner("Processing through guardrail pipeline..."):
             try:
                 chat_history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[:-1]]
-                resp = requests.post(f"{API_URL}/chat", json={"message": user_input, "session_id": st.session_state.session_id, "chat_history": chat_history[-10:], "role": role}, timeout=60)
+                resp = call_api_with_retry({"message": user_input, "session_id": st.session_state.session_id, "chat_history": chat_history[-10:], "role": role})
                 if resp.status_code == 200:
                     data = resp.json()
                     output = data["output"]
@@ -244,11 +264,11 @@ if user_input:
                         st.caption(f"Execution time: {data.get('execution_time_ms', 0):.0f}ms")
                     st.session_state.messages.append({"role": "assistant", "content": output, "guardrails": gr, "tools_called": data.get("tools_called", []), "execution_time_ms": data.get("execution_time_ms", 0), "blocked": blocked})
                 else:
-                    err = f"API error ({resp.status_code}): {resp.text[:200]}"
-                    st.error(err)
+                    err = f"Backend returned status {resp.status_code}. The server may be waking up — please try again in a few seconds."
+                    st.warning(err)
                     st.session_state.messages.append({"role": "assistant", "content": err})
             except requests.exceptions.ConnectionError:
-                err = "Cannot connect to backend. Make sure FastAPI is running on http://localhost:8000"
+                err = "Cannot connect to backend. Make sure FastAPI is running."
                 st.error(err)
                 st.session_state.messages.append({"role": "assistant", "content": err})
             except Exception as e:

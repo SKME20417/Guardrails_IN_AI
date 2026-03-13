@@ -4,13 +4,18 @@ from __future__ import annotations
 FastAPI backend serving the guarded LangChain agent.
 """
 
+import os
+import sys
 import logging
+import traceback
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout,
+                    format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("guardrails-api")
 
 app = FastAPI(
     title="Insurance Claims Agent API",
@@ -46,13 +51,26 @@ def get_db_client():
 
 @app.on_event("startup")
 async def startup():
-    import config
     logger.info("=== Backend Starting ===")
-    logger.info(f"EURI_API_KEY set: {bool(config.EURI_API_KEY)}")
-    logger.info(f"EURI_BASE_URL: {config.EURI_BASE_URL}")
-    logger.info(f"SUPABASE_URL set: {bool(config.SUPABASE_URL)}")
-    logger.info(f"SUPABASE_SERVICE_KEY set: {bool(config.SUPABASE_SERVICE_KEY)}")
-    logger.info("=== Startup complete, waiting for requests ===")
+    logger.info(f"Python: {sys.version}")
+    logger.info(f"CWD: {os.getcwd()}")
+    try:
+        import config
+        logger.info(f"EURI_API_KEY set: {bool(config.EURI_API_KEY)}")
+        logger.info(f"EURI_BASE_URL: {config.EURI_BASE_URL}")
+        logger.info(f"EURI_MODEL: {config.EURI_MODEL}")
+        logger.info(f"SUPABASE_URL set: {bool(config.SUPABASE_URL)}")
+        logger.info(f"SUPABASE_SERVICE_KEY set: {bool(config.SUPABASE_SERVICE_KEY)}")
+    except Exception as e:
+        logger.error(f"Config load failed: {e}")
+    logger.info("=== Startup complete ===")
+
+
+# ─── Root (Render health check hits this) ────────────────────
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "guardrails-api"}
 
 
 # ─── Chat Models ────────────────────────────────────────────────
@@ -96,6 +114,7 @@ async def chat(request: ChatRequest):
         )
         return ChatResponse(**result)
     except Exception as e:
+        logger.error(f"Chat error: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -124,30 +143,12 @@ async def health():
 async def guardrails_info():
     return {
         "layers": [
-            {
-                "name": "Policy Layer",
-                "description": "Role-based access, rate limiting, operation policies, data scope enforcement",
-            },
-            {
-                "name": "Input Layer",
-                "description": "SQL injection detection, prompt injection detection, PII redaction, input length/empty validation",
-            },
-            {
-                "name": "Instructional Layer",
-                "description": "Topic relevance enforcement, role deviation detection, instruction extraction prevention",
-            },
-            {
-                "name": "Execution Layer",
-                "description": "Tool access control, SQL validation (type, keywords, tables, row limits, multi-statement)",
-            },
-            {
-                "name": "Output Layer",
-                "description": "Sensitive data filtering, hallucination detection, response length control, instruction leak prevention",
-            },
-            {
-                "name": "Monitoring Layer",
-                "description": "Full pipeline logging to guardrail_logs table: inputs, outputs, tools, blocks, hallucinations, timing",
-            },
+            {"name": "Policy Layer", "description": "Role-based access, rate limiting, operation policies, data scope enforcement"},
+            {"name": "Input Layer", "description": "SQL injection detection, prompt injection detection, PII redaction, input length/empty validation"},
+            {"name": "Instructional Layer", "description": "Topic relevance enforcement, role deviation detection, instruction extraction prevention"},
+            {"name": "Execution Layer", "description": "Tool access control, SQL validation (type, keywords, tables, row limits, multi-statement)"},
+            {"name": "Output Layer", "description": "Sensitive data filtering, hallucination detection, response length control, instruction leak prevention"},
+            {"name": "Monitoring Layer", "description": "Full pipeline logging to guardrail_logs table: inputs, outputs, tools, blocks, hallucinations, timing"},
         ]
     }
 
@@ -183,6 +184,7 @@ async def get_monitoring_logs(
             "logs": result.data,
         }
     except Exception as e:
+        logger.error(f"Logs error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")
 
 
@@ -234,6 +236,7 @@ async def get_monitoring_stats():
             "hallucination_detected_count": hallucination_count,
         }
     except Exception as e:
+        logger.error(f"Stats error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to compute stats: {str(e)}")
 
 
@@ -261,6 +264,7 @@ async def get_sessions(limit: int = Query(20, ge=1, le=100)):
 
         return {"sessions": sessions}
     except Exception as e:
+        logger.error(f"Sessions error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch sessions: {str(e)}")
 
 
